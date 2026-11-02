@@ -188,9 +188,9 @@ unitypackage-registry/
 ### 8.3 管理画面
 
 - 認証プロキシ(OIDC。oauth2-proxy、Cloudflare Access等)の後ろに置く
-  - ログインできるのは自分のアカウント1つだけにする(メールアドレス/subjectのallowlist)。「IdPにログインできる人全員」にはしない
-- API側でも認証を検証する(多層防御)
-  - プロキシが付与するヘッダ/JWTを検証し、allowlistのユーザー以外は401/403にする
+  - 認可(誰がこの管理画面を使えるか)はOIDC側(IdP)の認可機能で行う。OIDCを通過したユーザーはすべて利用可とし、アプリ側でユーザーのallowlistは持たない
+- API側でも認証済みであることを検証する(多層防御)
+  - プロキシが付与するヘッダ/JWTを検証し(署名・issuer・audience・有効期限)、検証できないリクエストは401にする
   - プロキシを経由しない経路(Pod直、別Ingress)からの未認証リクエストを受け付けない
 - 状態を変えるAPIはCSRF対策をする(SameSite Cookie + Origin検証程度で十分)
 - 元unitypackageのダウンロード(アーカイブ用)もAPI経由(認証済み)でのみ行う
