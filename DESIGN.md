@@ -23,7 +23,7 @@
             │                              │ REST
             │                              ▼
             │                         [API Server] ──> [PVC: db (SQLite)]
-            │                              │  ├──> [PVC: data (元unitypackage / 作業領域)]
+            │                              │  ├──> [PVC: workspace (元unitypackage / ビルド作業領域)]
             │                              │  └──> [Job Queue]
             │                              ▼
             │                         [Converter Worker] ── npm publish(クラスタ内) ──> [Verdaccio]
@@ -47,12 +47,18 @@ Object Storage(MinIO等)は使わず、用途ごとに2つのPVCに分ける。
 | PVC | storageClass | バックアップ | 中身 |
 |---|---|---|---|
 | `db` | `serv12-d` | 世代バックアップあり | SQLite(設定・ビルド履歴・GUIDインデックス等、失うと困る小さなデータ) |
-| `data` | `serv12-b` | なし | 元unitypackage、ビルド時の作業領域(大容量・消えても復旧できるデータ) |
+| `workspace` | `serv12-d` | なし(世代管理の対象外) | 元unitypackage、展開・tarball生成の作業領域(消えても復旧できるデータ) |
 
-- **`data` は消えてもよい前提で作る**。元unitypackageはLTOテープ等へ手動でコールドアーカイブし、PVCから削除する運用もあり得る
+- `workspace` はunitypackageの展開とtarball生成でI/Oが多いため、容量より速度を優先して `serv12-d` に置く
+  - 世代バックアップの対象にはしないので、`db` とは別のPVCにする
+- `workspace` 内のディレクトリ構成
+  - `uploads/<sha256>.unitypackage`: 元ファイル(アーカイブ・削除されるまで保持)
+  - `builds/<build_id>/`: 展開物と生成tarball(ビルドごとの一時ディレクトリ。publish後・破棄時に削除。起動時に残骸を掃除する)
+
+- **`workspace` は消えてもよい前提で作る**。元unitypackageはLTOテープ等へ手動でコールドアーカイブし、PVCから削除する運用もあり得る
   - DBには元ファイルのsha256・ファイル名・サイズ・解析結果を残すので、元ファイルが無くても一覧・設定編集・履歴閲覧はできる
   - 元ファイルが必要になる操作(再ビルド等)は、同じファイルを再アップロードすると sha256 で既存のUploadに再び紐付き、そのまま続行できる(3.4)
-- **生成tarballは保存しない**。ビルドのたびに `data` の作業領域で作り、publish後(または破棄時)に消す
+- **生成tarballは保存しない**。ビルドのたびに `workspace` の作業領域で作り、publish後(または破棄時)に消す
   - publish済みのtarballが必要なときは Verdaccio から取得する(前バージョンとの差分表示など)
   - Verdaccioのストレージが失われても、DBの設定スナップショット + 元ファイルから同じtarballを再ビルドして再publishできるようにする。そのためビルドは決定的にする(同じ入力・同じ設定なら同じ中身。tarのmtime・エントリ順を固定する)
 - SQLiteのバックアップは `serv12-d` の世代バックアップに任せる(Litestream等は使わない)
@@ -63,7 +69,7 @@ Object Storage(MinIO等)は使わず、用途ごとに2つのPVCに分ける。
 ### 3.1 アップロード → 解析
 
 1. `.unitypackage` をアップロードする
-2. sha256を計算し、重複していれば既存のUploadに紐付ける。元ファイルは `data` PVCに保存する(アーカイブ済みで元ファイルが無いUploadと一致した場合は、元ファイルを戻して状態を `stored` に戻す)
+2. sha256を計算し、重複していれば既存のUploadに紐付ける。元ファイルは `workspace` PVCに保存する(アーカイブ済みで元ファイルが無いUploadと一致した場合は、元ファイルを戻して状態を `stored` に戻す)
 3. 解析する(tar.gzを展開。各エントリは `<guid>/asset`, `<guid>/asset.meta`, `<guid>/pathname`, `<guid>/preview.png` の構造)
    - pathname一覧からファイルツリーを作る
    - 既知パッケージの同梱を検出する(lilToon、Modular Avatar等を、GUIDやパスのパターンで判定)
@@ -81,8 +87,8 @@ Object Storage(MinIO等)は使わず、用途ごとに2つのPVCに分ける。
 
 ### 3.3 ビルド → publish
 
-1. 設定のスナップショットを取り、Buildレコードを作る(元ファイルが `data` に無ければ、再アップロードを促してビルドしない)
-2. Workerがtarballを `data` の作業領域に生成する
+1. 設定のスナップショットを取り、Buildレコードを作る(元ファイルが `workspace` に無ければ、再アップロードを促してビルドしない)
+2. Workerがtarballを `workspace` の作業領域に生成する
    - `package.json` を生成する(name, version, displayName, unity, dependencies, 独自メタ情報として元ファイル名・sha256・BOOTH URL)
    - 欠けているフォルダ.metaを生成する。GUIDは `hash(パッケージ名 + 相対パス)` で決定的にし、バージョンをまたいで安定させる
    - .metaパッチを適用する
@@ -93,7 +99,7 @@ Object Storage(MinIO等)は使わず、用途ごとに2つのPVCに分ける。
 
 ### 3.4 元ファイルのアーカイブと復旧
 
-- UIからUploadを「アーカイブ済み」にでき、`data` から元ファイルを削除する
+- UIからUploadを「アーカイブ済み」にでき、`workspace` から元ファイルを削除する
   - 保管先のメモ(テープID等)を自由入力で残せるようにする
   - アーカイブ前に、元ファイルをダウンロードしてsha256を照合できるようにする
 - 元ファイルが外部要因(PVC消失、手動削除)で無くなっていた場合も、起動時・参照時に検知して状態を `missing` にする(エラーで止めない)
