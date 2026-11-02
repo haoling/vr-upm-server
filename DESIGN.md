@@ -22,8 +22,8 @@
 [Browser] ──┼─> [認証プロキシ(OIDC)] ──> [管理画面 Web UI]
             │                              │ REST
             │                              ▼
-            │                         [API Server] ──> [DB (SQLite)]
-            │                              │  ├──> [Object Storage (MinIO等): 元unitypackage / 生成tarball]
+            │                         [API Server] ──> [PVC: db (SQLite)]
+            │                              │  ├──> [PVC: data (元unitypackage / 作業領域)]
             │                              │  └──> [Job Queue]
             │                              ▼
             │                         [Converter Worker] ── npm publish(クラスタ内) ──> [Verdaccio]
@@ -33,20 +33,37 @@
 ```
 
 - 外部に公開するエンドポイントは「管理画面」と「Verdaccio」の2つだけ。どちらもTLS必須
-- Object Storage・DB・Worker はクラスタ内からのみ到達可能にする(Ingressを作らない)
+- DB・Worker・Verdaccioのストレージはクラスタ内からのみ到達可能にする(Ingressを作らない)
 
 - 想定デプロイ先: 自宅k8s(ArgoCDで管理)。Verdaccioも同じクラスタに置く
 - API と Worker は同じコードベースで、起動モードだけ分ける構成でもよい(MVPは同一プロセスでもOK)
 - DBはSQLite(シングルユーザー・小規模のため)。k8sではPVC上に置き、replicas=1で運用する
-  - バックアップはLitestream等でObject Storageへ複製するか、定期dumpにする
   - SQLiteを使う関係でAPIとWorkerは同一Podにまとめるのが無難(別Podにするならジョブ状態の受け渡しを要検討)
+
+### 2.1 ストレージ
+
+Object Storage(MinIO等)は使わず、用途ごとに2つのPVCに分ける。
+
+| PVC | storageClass | バックアップ | 中身 |
+|---|---|---|---|
+| `db` | `serv12-d` | 世代バックアップあり | SQLite(設定・ビルド履歴・GUIDインデックス等、失うと困る小さなデータ) |
+| `data` | `serv12-b` | なし | 元unitypackage、ビルド時の作業領域(大容量・消えても復旧できるデータ) |
+
+- **`data` は消えてもよい前提で作る**。元unitypackageはLTOテープ等へ手動でコールドアーカイブし、PVCから削除する運用もあり得る
+  - DBには元ファイルのsha256・ファイル名・サイズ・解析結果を残すので、元ファイルが無くても一覧・設定編集・履歴閲覧はできる
+  - 元ファイルが必要になる操作(再ビルド等)は、同じファイルを再アップロードすると sha256 で既存のUploadに再び紐付き、そのまま続行できる(3.4)
+- **生成tarballは保存しない**。ビルドのたびに `data` の作業領域で作り、publish後(または破棄時)に消す
+  - publish済みのtarballが必要なときは Verdaccio から取得する(前バージョンとの差分表示など)
+  - Verdaccioのストレージが失われても、DBの設定スナップショット + 元ファイルから同じtarballを再ビルドして再publishできるようにする。そのためビルドは決定的にする(同じ入力・同じ設定なら同じ中身。tarのmtime・エントリ順を固定する)
+- SQLiteのバックアップは `serv12-d` の世代バックアップに任せる(Litestream等は使わない)
+  - 稼働中のDBファイルをそのままコピーすると壊れた状態を拾う可能性があるため、定期的に `VACUUM INTO` で整合性のとれたスナップショットファイルを同じPVCに書き出し、復旧時はそちらを使えるようにしておく
 
 ## 3. 主要フロー
 
 ### 3.1 アップロード → 解析
 
 1. `.unitypackage` をアップロードする
-2. sha256を計算し、重複していれば既存のUploadに紐付ける。元ファイルはObject Storageに保存する(再ビルド用に必ず残す)
+2. sha256を計算し、重複していれば既存のUploadに紐付ける。元ファイルは `data` PVCに保存する(アーカイブ済みで元ファイルが無いUploadと一致した場合は、元ファイルを戻して状態を `stored` に戻す)
 3. 解析する(tar.gzを展開。各エントリは `<guid>/asset`, `<guid>/asset.meta`, `<guid>/pathname`, `<guid>/preview.png` の構造)
    - pathname一覧からファイルツリーを作る
    - 既知パッケージの同梱を検出する(lilToon、Modular Avatar等を、GUIDやパスのパターンで判定)
@@ -64,14 +81,26 @@
 
 ### 3.3 ビルド → publish
 
-1. 設定のスナップショットを取り、Buildレコードを作る
-2. Workerがtarballを生成する
+1. 設定のスナップショットを取り、Buildレコードを作る(元ファイルが `data` に無ければ、再アップロードを促してビルドしない)
+2. Workerがtarballを `data` の作業領域に生成する
    - `package.json` を生成する(name, version, displayName, unity, dependencies, 独自メタ情報として元ファイル名・sha256・BOOTH URL)
    - 欠けているフォルダ.metaを生成する。GUIDは `hash(パッケージ名 + 相対パス)` で決定的にし、バージョンをまたいで安定させる
    - .metaパッチを適用する
    - 既存のGUIDはそのまま維持する(パッケージをまたいだ参照、例えば衣装→素体の参照を壊さないため)
 3. ビルドしたtarballのdry-runとして、ファイル一覧・サイズ・GUID衝突の最終チェックをUIに表示する
 4. Verdaccioに `npm publish` する。同じバージョンへの再publishは禁止とし、パッチ変更時はバージョンを上げる運用にする
+5. publish後、作業領域のtarballを削除する。tarballのsha256(integrity)はBuildに記録し、再ビルド時の一致確認に使う
+
+### 3.4 元ファイルのアーカイブと復旧
+
+- UIからUploadを「アーカイブ済み」にでき、`data` から元ファイルを削除する
+  - 保管先のメモ(テープID等)を自由入力で残せるようにする
+  - アーカイブ前に、元ファイルをダウンロードしてsha256を照合できるようにする
+- 元ファイルが外部要因(PVC消失、手動削除)で無くなっていた場合も、起動時・参照時に検知して状態を `missing` にする(エラーで止めない)
+- 復旧は再アップロードだけで済ませる。sha256が一致すれば既存のUpload・設定・ビルド履歴にそのまま紐付く
+- Verdaccioのストレージを失った場合は、publish済みBuildの一覧から「再publish」を実行する
+  - 元ファイルが無いものは一覧に「要再アップロード」と表示し、再アップロード後に再ビルド → integrityの一致を確認してからpublishする
+
 
 ## 4. 要検討の論点(Claude Codeで詰める)
 
@@ -128,9 +157,9 @@ unitypackage-registry/
 
 ## 7. データモデル(案)
 
-- **Upload**: id, sha256, original_filename, size, storage_key, uploaded_at, analysis_json
+- **Upload**: id, sha256, original_filename, size, uploaded_at, analysis_json, file_state(stored/archived/missing), archived_at, archive_note
 - **Package**: id, name, display_name, source_url(BOOTH), config_template(JSON/YAML)
-- **Build**: id, package_id, upload_id, version, source_version_label, config_snapshot, status(queued/building/ready/published/failed), tarball_key, log
+- **Build**: id, package_id, upload_id, version, source_version_label, config_snapshot, status(queued/building/ready/published/failed), tarball_integrity, log
 - **GuidIndex**: guid, package_name, version, path(衝突検出用)
 - **KnownPackage**: name, detect_rules(GUID/パスのパターン), replacement_dependency
 
@@ -158,7 +187,7 @@ unitypackage-registry/
   - プロキシが付与するヘッダ/JWTを検証し、allowlistのユーザー以外は401/403にする
   - プロキシを経由しない経路(Pod直、別Ingress)からの未認証リクエストを受け付けない
 - 状態を変えるAPIはCSRF対策をする(SameSite Cookie + Origin検証程度で十分)
-- tarballや元unitypackageのダウンロードもAPI経由(認証済み)でのみ行い、Object Storageの署名付きURLを外に渡さない
+- 元unitypackageのダウンロード(アーカイブ用)もAPI経由(認証済み)でのみ行う
 
 ### 8.4 Verdaccio
 
@@ -181,7 +210,7 @@ unitypackage-registry/
 
 ### 8.6 その他
 
-- Object Storage・DBは外部に公開しない(Ingress/LoadBalancerを作らない)
+- PVCの中身(DB・元ファイル)を直接外に出す経路は作らない
 - 大きなunitypackageのアップロードは、経路上のプロキシのbody上限に注意する(例: Cloudflare経由だとプランによって100MB程度の上限がある)。必要なら分割アップロードを検討する
 
 ## 9. フェーズ
