@@ -211,7 +211,8 @@ unitypackage-registry/
 
 - `manifest.json` の `scopedRegistries` にVerdaccioの外部URL(https)とscopeを書く
 - 認証トークンは `~/.upmconfig.toml` の `npmAuth` に置く(リポジトリには入れない)
-  - マシンごとに別トークンを発行し、紛失時に個別に失効できるようにする
+  - トークンは全端末で共通の1つにする(Verdaccioでは端末ごとの個別失効ができないため)
+  - 端末の紛失・漏洩時はトークンを作り直し、全端末の `~/.upmconfig.toml` を更新する
 
 ### 8.6 その他
 
