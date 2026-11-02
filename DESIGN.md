@@ -10,23 +10,30 @@
 ### 非ゴール
 
 - 公開配布(あくまで自分専用の非公開レジストリ)
+  - ネットワーク的には外部(インターネット)から到達可能にする(家の外からも使うため)
+  - 権限的には自分専用にする。認証を通らない限り、管理画面・レジストリのどちらも中身を見られないようにする
 - Unity Editor拡張の開発(必要になったら別途)
 - アセットの中身の編集機能
 
 ## 2. 全体構成
 
 ```
-[Browser] ──> [管理画面 Web UI]
-                   │ REST
-                   ▼
-              [API Server] ──> [DB (SQLite)]
-                   │  ├──> [Object Storage (MinIO等): 元unitypackage / 生成tarball]
-                   │  └──> [Job Queue]
-                   ▼
-              [Converter Worker] ── npm publish ──> [Verdaccio]
-                                                       ▲
-[Unity Editor] ── scopedRegistries + token ───────────┘
+            ┌───────────── インターネット ─────────────┐
+[Browser] ──┼─> [認証プロキシ(OIDC)] ──> [管理画面 Web UI]
+            │                              │ REST
+            │                              ▼
+            │                         [API Server] ──> [DB (SQLite)]
+            │                              │  ├──> [Object Storage (MinIO等): 元unitypackage / 生成tarball]
+            │                              │  └──> [Job Queue]
+            │                              ▼
+            │                         [Converter Worker] ── npm publish(クラスタ内) ──> [Verdaccio]
+            │                                                                            ▲
+[Unity] ────┼─> [Ingress(TLS)] ── scopedRegistries + token ────────────────────────────┘
+            └──────────────────────────────────────────┘
 ```
+
+- 外部に公開するエンドポイントは「管理画面」と「Verdaccio」の2つだけ。どちらもTLS必須
+- Object Storage・DB・Worker はクラスタ内からのみ到達可能にする(Ingressを作らない)
 
 - 想定デプロイ先: 自宅k8s(ArgoCDで管理)。Verdaccioも同じクラスタに置く
 - API と Worker は同じコードベースで、起動モードだけ分ける構成でもよい(MVPは同一プロセスでもOK)
@@ -129,18 +136,53 @@ unitypackage-registry/
 
 ## 8. セキュリティ・運用
 
+### 8.1 公開範囲の方針
+
+- **ネットワーク: 外部公開する**。家の外(出先のPC等)からも管理画面とレジストリを使うため、インターネットから到達可能にする
+- **パーミッション: 外部公開しない**。自分専用。未認証のリクエストには、パッケージ名・一覧・メタ情報を含めて一切何も返さない
+- 「ネットワーク的に閉じているから安全」には頼らない。各エンドポイントが単体で認証を強制する前提で設計する
+- 再配布にならないよう、匿名アクセスできるダウンロード経路(公開URL、署名なしの直リンク等)を作らない
+
+### 8.2 入力ファイル
+
 - 入力は外部ファイルとして扱う
   - pathnameのパストラバーサル(`..`、絶対パス)を拒否する
   - サイズ上限とgzip bomb対策を入れる
   - 解析時に中身を実行しない
-- Verdaccio
-  - 自分用のscope(`com.haoling.*` 等)は `access: $authenticated` にして、**npmjsへのuplink/proxyを無効化**する(名前の漏洩・依存かぶりを防止)
-  - publish権限は管理画面のサービスアカウントだけにする
-- 管理画面は認証プロキシ(OIDC等)の後ろに置く。シングルユーザー想定
-- Unityクライアント
-  - `manifest.json` の `scopedRegistries` にVerdaccioのURLとscopeを書く
-  - 認証トークンは `~/.upmconfig.toml` の `npmAuth` に置く(リポジトリには入れない)
-- 再配布にならないよう、レジストリもストレージも外部公開しない
+
+### 8.3 管理画面
+
+- 認証プロキシ(OIDC。oauth2-proxy、Cloudflare Access等)の後ろに置く
+  - ログインできるのは自分のアカウント1つだけにする(メールアドレス/subjectのallowlist)。「IdPにログインできる人全員」にはしない
+- API側でも認証を検証する(多層防御)
+  - プロキシが付与するヘッダ/JWTを検証し、allowlistのユーザー以外は401/403にする
+  - プロキシを経由しない経路(Pod直、別Ingress)からの未認証リクエストを受け付けない
+- 状態を変えるAPIはCSRF対策をする(SameSite Cookie + Origin検証程度で十分)
+- tarballや元unitypackageのダウンロードもAPI経由(認証済み)でのみ行い、Object Storageの署名付きURLを外に渡さない
+
+### 8.4 Verdaccio
+
+- Unityが家の外からも取得できるよう外部公開するが、**読み取りも含めて認証必須**にする
+  - すべてのパッケージパターンで `access: $authenticated`(`$all` / `$anonymous` を使わない)
+  - 自分用のscope(`com.haoling.*` 等)は **npmjsへのuplink/proxyを無効化**する(名前の漏洩・依存かぶりを防止)
+  - ユーザーの自己登録を無効化する(htpasswdの `max_users: -1`)
+  - publish権限は管理画面のサービスアカウントだけにする。Unity用のアカウント/トークンは読み取り専用にする
+  - Verdaccio付属のWeb UIは無効化するか、管理画面と同じ認証プロキシの後ろに置く
+- 認証プロキシ(OIDC)はUnityのUPMクライアントが通れないため、Verdaccioのnpm APIパスはプロキシの対象外とし、Verdaccio自身のトークン認証で守る
+  - UPMはカスタムヘッダを送れないので、Cloudflare Access のサービストークン等は使えない
+  - その分、Ingressでレート制限をかけ、ログイン試行の総当たりを抑える
+- 管理画面のWorkerからのpublishはクラスタ内のServiceに向け、外部経由にしない
+
+### 8.5 Unityクライアント
+
+- `manifest.json` の `scopedRegistries` にVerdaccioの外部URL(https)とscopeを書く
+- 認証トークンは `~/.upmconfig.toml` の `npmAuth` に置く(リポジトリには入れない)
+  - マシンごとに別トークンを発行し、紛失時に個別に失効できるようにする
+
+### 8.6 その他
+
+- Object Storage・DBは外部に公開しない(Ingress/LoadBalancerを作らない)
+- 大きなunitypackageのアップロードは、経路上のプロキシのbody上限に注意する(例: Cloudflare経由だとプランによって100MB程度の上限がある)。必要なら分割アップロードを検討する
 
 ## 9. フェーズ
 
