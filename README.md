@@ -33,7 +33,7 @@ yarn dev          # server(:3000)と web(:5173)を同時に起動。web の /api
 | コマンド | 内容 |
 |---|---|
 | `yarn typecheck` | 全パッケージの型チェック |
-| `yarn test` | vitest(`packages/*`、`apps/server`、`apps/cli`) |
+| `yarn test` | vitest(`packages/*`、`apps/server`、`apps/cli`、`apps/web`) |
 | `yarn build` | server のバンドルと web のビルド |
 | `yarn fixtures` | `fixtures/out/` に合成 unitypackage を生成 |
 | `yarn workspace @vr-upm/cli start analyze <file> [--json]` | unitypackage を解析してツリー・.meta が無いフォルダ・問題点を表示 |
@@ -54,6 +54,7 @@ k8s マニフェストはこのリポジトリには置かず、GitOps リポジ
 | `PORT` | `3000` | API の待ち受けポート |
 | `DB_PATH` | `/data/db/app.sqlite` | SQLite(`db` PVC) |
 | `WORKSPACE_DIR` | `/data/workspace` | 元 unitypackage・作業領域(`workspace` PVC) |
+| `MAX_UPLOAD_BYTES` | `4294967296`(4 GiB) | アップロードボディの上限(バイト) |
 | `ALLOWED_ORIGINS` | (空) | 状態を変える API で許可する Origin(カンマ区切り)。管理画面の外部 URL を入れる |
 
 ## UPM 変換(`vr-upm build`)
@@ -85,3 +86,32 @@ yarn workspace @vr-upm/cli start build fixtures/out/simple.unitypackage --config
 yarn workspace @vr-upm/cli start build fixtures/out/simple.unitypackage --config fixtures/configs/simple.json --out /tmp/item.tgz
 tar tzf /tmp/item.tgz
 ```
+
+## アップロードと解析結果の表示(管理画面)
+
+`yarn dev` で server(:3000)と web(:5173)を起動し、http://localhost:5173 を開きます(`apps/server/.env` が必要。`cp apps/server/.env.example apps/server/.env`)。
+`yarn fixtures` で作った `fixtures/out/*.unitypackage` を画面のフォームから上げると、Upload 詳細にファイルツリー(`.meta` が無いフォルダに印)と警告が出ます。
+同じファイルをもう一度上げても Upload は 1 件のままです。`traversal.unitypackage` のような異常ファイルは 422 で拒否され、`workspace` に何も残りません。
+
+API(`/api` 配下。状態を変える API は Origin チェックあり):
+
+| エンドポイント | 内容 |
+|---|---|
+| `POST /api/uploads?filename=<名前>` | ボディに unitypackage をそのまま入れる(multipart ではない)。ストリームで `workspace/uploads/<sha256>.unitypackage` に保存して解析する。新規は 201、既存と同じ内容は 200(`created: false`。archived / missing なら元ファイルを戻して `stored` にする)。上限超過は 413、解析できない入力は 422、`filename` 不正・空ボディは 400 |
+| `GET /api/uploads` | Upload 一覧(新しい順) |
+| `GET /api/uploads/:id` | Upload 詳細(解析結果の統計・警告・ファイルツリー込み) |
+
+```sh
+yarn fixtures
+# 別のターミナルで yarn dev を起動しておく(Origin ヘッダを付けない curl は Origin チェックを通る)
+curl -X POST --data-binary @fixtures/out/simple.unitypackage \
+  "http://localhost:3000/api/uploads?filename=simple.unitypackage"          # 201
+curl -X POST --data-binary @fixtures/out/simple.unitypackage \
+  "http://localhost:3000/api/uploads?filename=simple.unitypackage"          # 200(created: false)
+curl -X POST --data-binary @fixtures/out/traversal.unitypackage \
+  "http://localhost:3000/api/uploads?filename=traversal.unitypackage"       # 422
+curl http://localhost:3000/api/uploads/1
+ls apps/server/data/workspace/uploads                                        # <sha256>.unitypackage だけ(残骸なし)
+```
+
+受信中のファイルは `workspace/uploads/.incoming-*` に書き、解析が通ってから `<sha256>.unitypackage` に rename します。異常終了で残ったものは起動時に消します。

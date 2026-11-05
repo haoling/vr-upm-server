@@ -1,15 +1,14 @@
 import { serveStatic } from "@hono/node-server/serve-static";
-import type { HealthResponse, UploadListResponse } from "@vr-upm/shared";
-import { desc } from "drizzle-orm";
+import type { HealthResponse } from "@vr-upm/shared";
 import { Hono } from "hono";
 import type { Config } from "./config.js";
 import type { Db } from "./db/client.js";
-import { uploads } from "./db/schema.js";
 import { originCheck } from "./middleware/origin-check.js";
+import { uploadRoutes } from "./uploads/routes.js";
 import { VERSION } from "./version.js";
 
 export interface AppDeps {
-  config: Pick<Config, "MODE" | "ALLOWED_ORIGINS" | "WEB_DIST_DIR">;
+  config: Pick<Config, "MODE" | "ALLOWED_ORIGINS" | "WEB_DIST_DIR" | "WORKSPACE_DIR" | "MAX_UPLOAD_BYTES">;
   db: Db;
 }
 
@@ -23,20 +22,7 @@ export function createApp({ config, db }: AppDeps) {
     .get("/health", (c) =>
       c.json({ status: "ok", version: VERSION, mode: config.MODE } satisfies HealthResponse),
     )
-    .get("/uploads", (c) => {
-      const rows = db.select().from(uploads).orderBy(desc(uploads.id)).all();
-      const body: UploadListResponse = {
-        uploads: rows.map((r) => ({
-          id: r.id,
-          sha256: r.sha256,
-          originalFilename: r.originalFilename,
-          size: r.size,
-          uploadedAt: r.uploadedAt,
-          fileState: r.fileState,
-        })),
-      };
-      return c.json(body);
-    });
+    .route("/uploads", uploadRoutes({ db, workspaceDir: config.WORKSPACE_DIR, maxUploadBytes: config.MAX_UPLOAD_BYTES }));
 
   const app = new Hono().route("/api", api);
 

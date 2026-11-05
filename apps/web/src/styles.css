@@ -1,0 +1,24 @@
+:root { font-family: system-ui, sans-serif; color-scheme: light dark; }
+body { margin: 0; }
+.layout { max-width: 960px; margin: 0 auto; padding: 0 1rem 3rem; }
+header { padding: 1rem 0; border-bottom: 1px solid #8884; }
+.brand { font-weight: 700; text-decoration: none; color: inherit; }
+.upload-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin: 1rem 0; }
+.progress { display: flex; gap: 0.5rem; align-items: center; width: 100%; }
+.progress progress { flex: 1; }
+.error { color: crimson; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #8884; }
+dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+dl.meta dt { font-weight: 600; }
+dl.meta dd { margin: 0; overflow-wrap: anywhere; }
+.issues { padding-left: 1.2rem; }
+.issues .error::before { content: "✖ "; }
+.issues .warning::before { content: "⚠ "; }
+.tree, .tree ul { list-style: none; padding-left: 1.2rem; margin: 0; }
+.tree { padding-left: 0; font-family: ui-monospace, monospace; font-size: 0.9rem; }
+.tree li { padding: 0.1rem 0; }
+.tree .toggle { all: unset; cursor: pointer; }
+.tree .size { margin-left: 0.75rem; opacity: 0.6; }
+.badge { margin-left: 0.5rem; padding: 0 0.4rem; border-radius: 4px; font-size: 0.75rem; }
+.badge.warn { background: #f5a62344; }

@@ -1,3 +1,4 @@
+import type { ApiError } from "@vr-upm/shared";
 import { createMiddleware } from "hono/factory";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -14,7 +15,7 @@ export function originCheck(allowedOrigins: readonly string[]) {
     if (!SAFE_METHODS.has(c.req.method)) {
       const origin = c.req.header("origin");
       if (origin !== undefined && !allowed.has(origin)) {
-        return c.json({ error: "origin not allowed" }, 403);
+        return c.json({ error: "origin not allowed", code: "origin-not-allowed" } satisfies ApiError, 403);
       }
     }
     await next();

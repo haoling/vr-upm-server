@@ -14,6 +14,8 @@ const Env = z.object({
         .map((o) => o.trim())
         .filter(Boolean),
     ),
+  // アップロードボディの上限(バイト)。既定は解析側の入力上限と同じ 4 GiB
+  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(4 * 1024 ** 3),
   WEB_DIST_DIR: z.string().optional(),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(2000),
 });
