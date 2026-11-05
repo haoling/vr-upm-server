@@ -3,10 +3,13 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db/client.js";
+import { cleanupIncoming, ensureUploadsDir } from "./uploads/storage.js";
 import { startWorker } from "./worker.js";
 
 const config = loadConfig();
 mkdirSync(config.WORKSPACE_DIR, { recursive: true });
+ensureUploadsDir(config.WORKSPACE_DIR);
+await cleanupIncoming(config.WORKSPACE_DIR);
 const db = openDb(config.DB_PATH);
 
 const stoppers: Array<() => void> = [];
