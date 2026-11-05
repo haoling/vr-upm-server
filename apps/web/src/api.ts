@@ -6,6 +6,8 @@ import {
   PackageDetail,
   PackageListResponse,
   type PackageSaveRequest,
+  PublishedListResponse,
+  RegistryInfo,
   UploadCreateResponse,
   UploadDetail,
   UploadListResponse,
@@ -96,6 +98,9 @@ export const api = {
   builds: () => getJson("/api/builds", BuildListResponse),
   build: (id: number) => getJson(`/api/builds/${id}`, BuildDetail),
   createBuild: (packageId: number, uploadId: number) => sendJson("POST", "/api/builds", { packageId, uploadId }, BuildDetail),
+  publishBuild: (id: number) => sendJson("POST", `/api/builds/${id}/publish`, {}, BuildDetail),
+  registry: () => getJson("/api/registry", RegistryInfo),
+  published: () => getJson("/api/published", PublishedListResponse),
   discardBuild: async (id: number): Promise<void> => {
     const res = await fetch(`/api/builds/${id}`, { method: "DELETE" });
     if (!res.ok) throw toApiRequestError(res.status, await res.text());

@@ -2,7 +2,7 @@ import type { ApiError } from "@vr-upm/shared";
 import type { Context } from "hono";
 import type { z } from "zod";
 
-export type ErrorStatus = 400 | 404 | 409 | 413 | 422 | 500;
+export type ErrorStatus = 400 | 404 | 409 | 413 | 422 | 500 | 502 | 503;
 
 export const fail = (status: ErrorStatus, body: ApiError) => Response.json(body, { status });
 

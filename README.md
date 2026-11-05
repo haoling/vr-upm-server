@@ -40,6 +40,7 @@ yarn dev          # server(:3000)と web(:5173)を同時に起動。web の /api
 | `yarn fixtures` | `fixtures/out/` に合成 unitypackage を生成 |
 | `yarn workspace @vr-upm/cli start analyze <file> [--json]` | unitypackage を解析してツリー・.meta が無いフォルダ・問題点を表示 |
 | `yarn workspace @vr-upm/cli start build <file> --config <json> [--out <tgz>] [--dry-run] [--json]` | 変換設定に従って UPM の tarball(.tgz)を作る。`--dry-run` ならファイル一覧とサイズだけ表示。同じ入力・設定なら integrity は常に同じ |
+| `yarn workspace @vr-upm/server dev:registry` | Docker なしでローカル用 Verdaccio(設定は docker compose と同じ)をプロセス内で起動し、publish 用のトークンを表示する(下の「Verdaccio への publish」) |
 | `yarn workspace @vr-upm/server db:generate` | `src/db/schema.ts` の変更から Drizzle のマイグレーションを生成 |
 
 マイグレーションは server の起動時に自動で適用されます。
@@ -58,6 +59,8 @@ k8s マニフェストはこのリポジトリには置かず、GitOps リポジ
 | `WORKSPACE_DIR` | `/data/workspace` | 元 unitypackage・作業領域(`workspace` PVC) |
 | `MAX_UPLOAD_BYTES` | `4294967296`(4 GiB) | アップロードボディの上限(バイト) |
 | `ALLOWED_ORIGINS` | (空) | 状態を変える API で許可する Origin(カンマ区切り)。管理画面の外部 URL を入れる |
+| `REGISTRY_URL` | (空) | publish 先の Verdaccio の URL。クラスタ内の Service を指す(外部 URL 経由にしない) |
+| `REGISTRY_TOKEN` | (空) | publish 権限を持つサービスアカウント(`publisher`)のトークン。どちらかが空だと publish は無効(503) |
 
 ## UPM 変換(`vr-upm build`)
 
@@ -123,7 +126,7 @@ ls apps/server/data/workspace/uploads                                        # <
 Upload 詳細の「このファイルからパッケージ設定を作る」から設定画面に入ります。
 名前・version などを入力し、ファイルツリー上で「ルートにする」と、ルート配下の「除外」チェックを選べます(除外はルートからの相対パスの glob として保存され、テキスト欄でも編集できます)。
 「保存してビルド」で Build が queued になり、Worker が `workspace/builds/<id>/` で変換して ready / failed にします。Build 詳細に dry-run(tarball に入るファイル・サイズ・警告)とログが出ます。
-ready の Build の tarball は `workspace/builds/<id>/package.tgz` に残ります(publish は M5)。「この Build を破棄」でレコードと tarball を消します。
+ready の Build の tarball は `workspace/builds/<id>/package.tgz` に残ります(publish すると消えます。下の「Verdaccio への publish」)。「この Build を破棄」でレコードと tarball を消します。
 
 - Build は作成時点の設定のスナップショットを持ち、Package を後から編集しても変わりません
 - 元ファイルが `workspace` に無い Upload ではビルドを作れません(409)。同じファイルを再アップロードすると元の Upload に戻ります
@@ -158,3 +161,102 @@ curl -X DELETE http://localhost:3000/api/builds/1                               
 ```
 
 CLI(`vr-upm build`)と同じ入力・設定なら、Worker が作る tarball の integrity は CLI と一致します。
+
+## Verdaccio への publish
+
+ready の Build を Verdaccio に publish します(DESIGN.md 3.3 の 4〜5、8.4)。
+
+- 管理画面の Build 詳細に「Verdaccio に publish」ボタンが出ます(`REGISTRY_URL` と `REGISTRY_TOKEN` が未設定なら無効と表示)。publish 済みのバージョンは「公開済み」画面に並びます
+- publish は `libnpmpublish` で行い、レジストリへ送る manifest は tarball 自身の `package/package.json` です。送る前に tarball の integrity が Build に記録したものと一致するか確認します
+- **同じパッケージ・version の再 publish は拒否します**(管理画面側で 409 `version-already-published`。DB にも一意制約があります)。DB の記録が無くてもレジストリが 409 を返せば同じく拒否します。version を上げてビルドし直してください
+- publish に失敗(認証・接続・拒否)しても Build は ready のままで、理由が Build のログに残ります。直したらもう一度 publish できます
+- 成功すると status が `published` になり、作業領域(`workspace/builds/<id>/`)を消します。tarball の integrity(sha512)は Build に残ります。再 publish が必要なときは、同じ入力・設定から決定的に再ビルドして integrity を照合できます
+
+API(`/api` 配下。状態を変える API は Origin チェックあり):
+
+| エンドポイント | 内容 |
+|---|---|
+| `POST /api/builds/:id/publish` | ready の Build を publish して、`published` の Build 詳細を返す。ready 以外・tarball 欠落は 409 `invalid-state`、integrity 不一致は 409 `integrity-mismatch`、同じ version は 409 `version-already-published`、レジストリ未設定は 503 `registry-not-configured`、レジストリ側の失敗は 502 `publish-failed` |
+| `GET /api/published` | publish 済みの Build(新しい順) |
+| `GET /api/registry` | `{url, publishEnabled}`(トークンは返さない) |
+
+### ローカルで確認する(docker compose)
+
+`verdaccio/conf/config.yaml` が設定例です。DESIGN.md 8.4 のとおり、全パッケージで読み取りも `$authenticated`、npmjs への uplink なし、`max_users: -1`(自己登録なし)、Web UI 無効、publish / unpublish は `publisher` だけです。`com.haoling.*` 以外の名前も同じ扱いです(自分用の scope に合わせて書き換えてください)。
+
+```sh
+# 1. ユーザー(htpasswd)を作る。自己登録は無効なので、ファイルに直接書く
+docker run --rm httpd:2 htpasswd -nbB publisher '<publisher のパスワード>' >  verdaccio/conf/htpasswd
+docker run --rm httpd:2 htpasswd -nbB unity     '<unity のパスワード>'     >> verdaccio/conf/htpasswd
+chmod 644 verdaccio/conf/htpasswd
+
+# 2. 起動
+docker compose up -d
+
+# 3. トークンを取る(既存ユーザーのログイン。Basic 認証つきの PUT)
+curl -s -X PUT -u 'publisher:<publisher のパスワード>' -H 'content-type: application/json' \
+  -d '{"name":"publisher","password":"<publisher のパスワード>"}' \
+  http://localhost:4873/-/user/org.couchdb.user:publisher        # {"ok":...,"token":"..."} の token
+# unity ユーザーも同じ要領で取る(Unity 用。トークンは全端末で共通の 1 つ)
+
+# 4. server に渡して起動(apps/server/.env に書いてもよい)
+REGISTRY_URL=http://localhost:4873 REGISTRY_TOKEN=<publisher の token> yarn dev
+```
+
+> Docker が使えない環境では、手順 1〜4 の代わりに `yarn workspace @vr-upm/server dev:registry` で同じ設定の Verdaccio がプロセス内で立ち上がります(`:4873`。データは `apps/server/data/verdaccio`)。開発用の固定パスワードで `publisher` / `unity` を作り、`REGISTRY_URL` と各トークンを表示します。
+
+### 通しで試す(アップロード → ビルド → publish → 取得)
+
+`dev:registry`(または docker compose)と、`REGISTRY_URL` / `REGISTRY_TOKEN` を付けた `yarn dev` が動いている状態で、`ALLOWED_ORIGINS` に管理画面の URL を入れておけばブラウザからも操作できます。curl なら次のとおりです(Origin ヘッダを付けない curl は Origin チェックを通ります)。
+
+```sh
+yarn fixtures
+curl -X POST --data-binary @fixtures/out/simple.unitypackage \
+  "http://localhost:3000/api/uploads?filename=simple.unitypackage"                      # Upload #1
+curl -X POST -H 'content-type: application/json' \
+  --data "{\"config\": $(cat fixtures/configs/simple.json)}" http://localhost:3000/api/packages   # Package #1
+curl -X POST -H 'content-type: application/json' \
+  -d '{"packageId":1,"uploadId":1}' http://localhost:3000/api/builds                    # Build #1
+sleep 3
+curl -X POST http://localhost:3000/api/builds/1/publish                                 # status: published
+curl -X POST http://localhost:3000/api/builds/1/publish                                 # 409 version-already-published
+ls apps/server/data/workspace/builds                                                    # 空(作業領域は消えた)
+curl http://localhost:3000/api/published
+
+# レジストリ側: 未認証は 401、Unity 用トークンなら取得できる(dist.integrity は Build の tarballIntegrity と同じ)
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:4873/com.example.dummyshop.dummyitem          # 401
+curl -s -H 'Authorization: Bearer <unity の token>' http://localhost:4873/com.example.dummyshop.dummyitem
+```
+
+### Unity 側の設定
+
+`Packages/manifest.json`(git で管理するのはこれだけ。トークンは入れない)に、レジストリの**外部 URL**(https)と scope を書きます。
+Verdaccio が返す tarball の URL が外部 URL になるよう、外部公開する Verdaccio には `url_prefix` を設定してください。
+
+```json
+{
+  "scopedRegistries": [
+    {
+      "name": "vr-upm",
+      "url": "https://upm.example.com",
+      "scopes": ["com.haoling"]
+    }
+  ],
+  "dependencies": {
+    "com.haoling.booth.shop.item": "1.0.0"
+  }
+}
+```
+
+認証トークンは端末ごとの `~/.upmconfig.toml`(Windows は `%USERPROFILE%\.upmconfig.toml`、macOS / Linux は `~/.upmconfig.toml`)に置きます。**読み取り専用の `unity` ユーザーのトークン**を使い、`publisher` のトークンは入れないでください。
+
+```toml
+[npmAuth."https://upm.example.com"]
+token = "<unity の token>"
+alwaysAuth = true
+```
+
+- `alwaysAuth = true` が必要です(読み取りも認証必須のため。無いと未認証でリクエストして 401 になります)
+- トークンは全端末で共通の 1 つです。Verdaccio では端末ごとの個別失効ができないので、紛失・漏洩したらトークンを作り直し、全端末の `~/.upmconfig.toml` を更新します
+- scope は `Packages/manifest.json` の `scopes` とパッケージ名の接頭辞で決まります(`com.haoling.booth.shop.item` なら `com.haoling`)
+- レジストリを経由しない環境(ローカルの `http://localhost:4873`)で試すときは、`url` を `http://localhost:4873` に、`[npmAuth."http://localhost:4873"]` に読み替えます

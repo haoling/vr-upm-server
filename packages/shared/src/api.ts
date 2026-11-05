@@ -104,6 +104,12 @@ export const ApiErrorCode = z.enum([
   "version-already-published",
   /** 状態のせいでその操作はできない(ビルド中の破棄など) */
   "invalid-state",
+  /** publish 先のレジストリ(REGISTRY_URL / REGISTRY_TOKEN)が設定されていない */
+  "registry-not-configured",
+  /** tarball の integrity が Build に記録したものと違う(壊れている) */
+  "integrity-mismatch",
+  /** レジストリへの publish に失敗した(認証・接続・拒否など) */
+  "publish-failed",
   "origin-not-allowed",
   "internal-error",
 ]);
@@ -187,6 +193,8 @@ export const BuildSummary = z.object({
   tarballIntegrity: z.string().nullable(),
   tarballSize: z.number().int().nonnegative().nullable(),
   createdAt: z.string(),
+  /** publish した日時。published 以外は null */
+  publishedAt: z.string().nullable(),
 });
 export type BuildSummary = z.infer<typeof BuildSummary>;
 
@@ -201,3 +209,18 @@ export const BuildDetail = BuildSummary.extend({
   dryRun: DryRunReport.nullable(),
 });
 export type BuildDetail = z.infer<typeof BuildDetail>;
+
+// ---- publish(DESIGN.md 3.3 の 4〜5、8.4) ----
+
+/** `GET /api/registry`。publish 先の情報(トークンは返さない) */
+export const RegistryInfo = z.object({
+  /** publish 先のレジストリ URL。未設定なら null */
+  url: z.string().nullable(),
+  /** URL とトークンが揃っていて publish できるか */
+  publishEnabled: z.boolean(),
+});
+export type RegistryInfo = z.infer<typeof RegistryInfo>;
+
+/** `GET /api/published`。publish 済みのバージョン(新しい順) */
+export const PublishedListResponse = z.object({ published: z.array(BuildSummary) });
+export type PublishedListResponse = z.infer<typeof PublishedListResponse>;
