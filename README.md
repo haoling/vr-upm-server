@@ -22,6 +22,8 @@ Yarn(v4、`nodeLinker: node-modules`)workspaces のモノレポです。
 ## 開発
 
 Node.js 22.12 以上と Yarn 4 が必要です(`corepack enable` で `packageManager` のバージョンが入ります)。
+localhost 以外のホスト名(リバースプロキシやクラウド開発環境)から web の開発サーバーを開くときは、`ALLOWED_HOSTS=<ホスト名>`(カンマ区切り。`apps/web/.env` でも可。`apps/web/.env.example` 参照)を指定します。
+その場合、書き込み API の Origin チェックのため、server の `ALLOWED_ORIGINS` にも同じ URL(例: `https://<ホスト名>`)を入れてください。
 公開から 1 日未満のバージョンは Yarn の既定(`npmMinimalAgeGate`)で入らないので、依存を上げるときは注意してください。
 
 ```sh
