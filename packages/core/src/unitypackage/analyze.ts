@@ -3,7 +3,7 @@ import { isUnityGuid } from "../guid.js";
 import { normalizeAssetPathname, UnsafePathnameError } from "../pathname.js";
 import { UnitypackageAnalysisError } from "./errors.js";
 import { type AnalyzeLimits, DEFAULT_ANALYZE_LIMITS } from "./limits.js";
-import { type RawUnitypackage, readUnitypackage, type UnitypackageInput } from "./read.js";
+import { type AssetSink, type RawUnitypackage, readUnitypackage, type UnitypackageInput } from "./read.js";
 
 export interface AnalyzeOptions {
   /** 一部だけ指定すれば、残りは {@link DEFAULT_ANALYZE_LIMITS} を使う */
@@ -18,9 +18,32 @@ export interface AnalyzeOptions {
  * それ以外の問題(.meta の guid 不一致、GUID 重複など)は結果の `issues` に入れる。
  */
 export async function analyzeUnitypackage(input: UnitypackageInput, options: AnalyzeOptions = {}): Promise<AnalysisResult> {
+  return (await inspectUnitypackage(input, options)).analysis;
+}
+
+export interface InspectOptions extends AnalyzeOptions {
+  /** 指定すると、各 `<guid>/asset` の中身をここへ書き出す(変換用)。省略すると中身は保持しない */
+  assetSink?: AssetSink;
+}
+
+export interface InspectResult {
+  analysis: AnalysisResult;
+  /** `<guid>` ディレクトリ名 → asset.meta の本文(.meta を持つエントリだけ) */
+  metas: Map<string, string>;
+}
+
+/**
+ * {@link analyzeUnitypackage} に加えて、変換に必要な asset.meta の本文と asset の中身も取り出す。
+ * asset の中身は `assetSink` に流すだけで、core は保持しない。
+ */
+export async function inspectUnitypackage(input: UnitypackageInput, options: InspectOptions = {}): Promise<InspectResult> {
   const limits: AnalyzeLimits = { ...DEFAULT_ANALYZE_LIMITS, ...options.limits };
-  const raw = await readUnitypackage(input, limits);
-  return assembleAnalysis(raw);
+  const raw = await readUnitypackage(input, limits, options.assetSink);
+  const metas = new Map<string, string>();
+  for (const [dir, entry] of raw.entries) {
+    if (entry.meta !== undefined) metas.set(dir, entry.meta);
+  }
+  return { analysis: assembleAnalysis(raw), metas };
 }
 
 const META_GUID_PATTERN = /^guid:\s*([0-9a-fA-F]{32})\s*$/m;

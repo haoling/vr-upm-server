@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "@vr-upm/shared": "workspace:*",
+    "picomatch": "^4.0.7",
     "tar": "^7.5.22"
   },
   "devDependencies": {
+    "@types/picomatch": "^4.0.0",
     "@vr-upm/fixtures": "workspace:*",
     "vite": "^8.3.5",
     "vitest": "^5.1.0"
