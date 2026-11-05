@@ -11,3 +11,10 @@ coverage/
 *.sqlite
 *.sqlite-*
 fixtures/out/
+
+# Yarn(node-modules linker、PnP は使わない)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+.pnp.*
