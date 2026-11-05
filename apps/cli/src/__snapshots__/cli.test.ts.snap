@@ -1,0 +1,105 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`vr-upm analyze > bundled-liltoon > ツリーと .meta が無いフォルダを表示する 1`] = `
+"bundled-liltoon.unitypackage
+  ファイル 2 個(37 B)/ フォルダ .meta 0 個 / tar エントリ 8 個
+
+Assets/
+├── DummyShop/  [.meta なし]
+│   └── DummyItem/  [.meta なし]
+│       └── Models/  [.meta なし]
+│           └── body.fbx  9 B
+└── lilToon/  [.meta なし]
+    └── Shader/  [.meta なし]
+        └── lts.shader  28 B
+
+.meta が無いフォルダ: 5 個
+  Assets/DummyShop
+  Assets/DummyShop/DummyItem
+  Assets/DummyShop/DummyItem/Models
+  Assets/lilToon
+  Assets/lilToon/Shader
+
+問題: なし
+"
+`;
+
+exports[`vr-upm analyze > simple > ツリーと .meta が無いフォルダを表示する 1`] = `
+"simple.unitypackage
+  ファイル 3 個(35 B)/ フォルダ .meta 0 個 / tar エントリ 13 個
+
+Assets/
+└── DummyShop/  [.meta なし]
+    └── DummyItem/  [.meta なし]
+        ├── Models/  [.meta なし]
+        │   └── body.fbx  9 B
+        ├── Prefabs/  [.meta なし]
+        │   └── item.prefab  10 B
+        └── Textures/  [.meta なし]
+            └── body.png  16 B
+
+.meta が無いフォルダ: 5 個
+  Assets/DummyShop
+  Assets/DummyShop/DummyItem
+  Assets/DummyShop/DummyItem/Models
+  Assets/DummyShop/DummyItem/Prefabs
+  Assets/DummyShop/DummyItem/Textures
+
+問題: なし
+"
+`;
+
+exports[`vr-upm analyze > with-issues > ツリーと .meta が無いフォルダを表示する 1`] = `
+"with-issues.unitypackage
+  ファイル 4 個(30 B)/ フォルダ .meta 2 個 / tar エントリ 22 個
+
+Assets/
+└── DummyShop/
+    └── DummyItem/
+        ├── Models/  [.meta なし]
+        │   ├── body.fbx  9 B
+        │   └── body_copy.fbx  9 B
+        └── Textures/  [.meta なし]
+            └── no_meta.png  4 B
+Packages/
+└── com.example.dummy/
+    └── Runtime/  [.meta なし]
+        └── a.cs  8 B
+
+.meta が無いフォルダ: 3 個
+  Assets/DummyShop/DummyItem/Models
+  Assets/DummyShop/DummyItem/Textures
+  Packages/com.example.dummy/Runtime
+
+問題: 4 件
+  [エラー] duplicate-guid: GUID 72efcf5baccdc4f66bae9a2ee4622232 が複数のアセットで使われています: Assets/DummyShop/DummyItem/Models/body.fbx, Assets/DummyShop/DummyItem/Models/body_copy.fbx
+  [警告] meta-guid-mismatch: Assets/DummyShop/DummyItem/Models/body_copy.fbx の .meta の guid (72efcf5baccdc4f66bae9a2ee4622232) がディレクトリ名 (de9459bb8d97220743ddd3df1f5036cc) と一致しません
+  [警告] missing-meta: Assets/DummyShop/DummyItem/Textures/no_meta.png に .meta がありません
+  [警告] unexpected-entry: 想定外のエントリ README.txt を無視しました
+"
+`;
+
+exports[`vr-upm analyze > 異常系 bomb は [compression-ratio-exceeded] で止まり、何も出力しない 1`] = `
+"bomb.unitypackage: 解析を中止しました [compression-ratio-exceeded] compression ratio exceeds 100 (possible gzip bomb)
+"
+`;
+
+exports[`vr-upm analyze > 異常系 corrupt は [corrupt-archive] で止まり、何も出力しない 1`] = `
+"corrupt.unitypackage: 解析を中止しました [corrupt-archive] broken gzip: unexpected end of file
+"
+`;
+
+exports[`vr-upm analyze > 異常系 symlink は [unsupported-entry-type] で止まり、何も出力しない 1`] = `
+"symlink.unitypackage: 解析を中止しました [unsupported-entry-type] unsupported tar entry type SymbolicLink: "2a304a1348456ccd2234cd71a81bd338/asset"
+"
+`;
+
+exports[`vr-upm analyze > 異常系 tar-traversal は [unsafe-path] で止まり、何も出力しない 1`] = `
+"tar-traversal.unitypackage: 解析を中止しました [unsafe-path] path traversal in tar entry: "../evil/asset"
+"
+`;
+
+exports[`vr-upm analyze > 異常系 traversal は [unsafe-path] で止まり、何も出力しない 1`] = `
+"traversal.unitypackage: 解析を中止しました [unsafe-path] bfc40c0598e3820e3d166c4446854544/pathname: unsafe pathname "Assets/../../evil.txt": path traversal
+"
+`;

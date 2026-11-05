@@ -10,7 +10,12 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@vr-upm/shared": "workspace:*",
+    "tar": "^7.5.22"
+  },
   "devDependencies": {
+    "@vr-upm/fixtures": "workspace:*",
     "vitest": "^5.1.0"
   }
 }

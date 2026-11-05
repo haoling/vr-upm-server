@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "description": "テスト用の合成 unitypackage を生成する(実際の BOOTH アセットは入れない)",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "generate": "tsx generate.ts",
     "typecheck": "tsc -p tsconfig.json"
-  },
-  "devDependencies": {
-    "tar": "^7.5.22"
   }
 }

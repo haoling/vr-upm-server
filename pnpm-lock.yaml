@@ -21,6 +21,22 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15))
 
+  apps/cli:
+    dependencies:
+      '@vr-upm/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@vr-upm/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      '@vr-upm/fixtures':
+        specifier: workspace:*
+        version: link:../../fixtures
+      vitest:
+        specifier: ^5.1.0
+        version: 5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15))
+
   apps/server:
     dependencies:
       '@hono/node-server':
@@ -86,14 +102,20 @@ importers:
         specifier: ^8.3.6
         version: 8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)
 
-  fixtures:
-    devDependencies:
+  fixtures: {}
+
+  packages/core:
+    dependencies:
+      '@vr-upm/shared':
+        specifier: workspace:*
+        version: link:../shared
       tar:
         specifier: ^7.5.22
         version: 7.5.22
-
-  packages/core:
     devDependencies:
+      '@vr-upm/fixtures':
+        specifier: workspace:*
+        version: link:../../fixtures
       vitest:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15))

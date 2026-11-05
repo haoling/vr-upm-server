@@ -11,9 +11,10 @@ pnpm workspaces のモノレポです。
 |---|---|
 | `apps/server` | Hono API + Converter Worker(`MODE=all/api/worker` で切り替え)、Drizzle + SQLite |
 | `apps/web` | React + Vite の管理画面 SPA |
+| `apps/cli` | ローカルで解析・変換を試す CLI(`vr-upm`) |
 | `packages/core` | unitypackage 解析・UPM 変換の純粋ライブラリ(I/O を持たない) |
 | `packages/shared` | server / web で共有する API 契約(zod スキーマ) |
-| `fixtures` | テスト用の合成 unitypackage 生成スクリプト |
+| `fixtures` | テスト用の合成 unitypackage の生成(異常系を含む。一覧は `fixtures/src/catalog.ts`) |
 
 ワークスペース内パッケージ(`@vr-upm/*`)はビルドせず TS ソースのまま参照します。
 開発時は tsx / Vite がそのまま読み、本番では `apps/server/build.mjs` が esbuild で 1 ファイルにバンドルします。
@@ -31,9 +32,10 @@ pnpm dev          # server(:3000)と web(:5173)を同時に起動。web の /api
 | コマンド | 内容 |
 |---|---|
 | `pnpm typecheck` | 全パッケージの型チェック |
-| `pnpm test` | vitest(`packages/*` と `apps/server`) |
+| `pnpm test` | vitest(`packages/*`、`apps/server`、`apps/cli`) |
 | `pnpm build` | server のバンドルと web のビルド |
 | `pnpm fixtures` | `fixtures/out/` に合成 unitypackage を生成 |
+| `pnpm --filter @vr-upm/cli start analyze <file> [--json]` | unitypackage を解析してツリー・.meta が無いフォルダ・問題点を表示 |
 | `pnpm --filter @vr-upm/server db:generate` | `src/db/schema.ts` の変更から Drizzle のマイグレーションを生成 |
 
 マイグレーションは server の起動時に自動で適用されます。
