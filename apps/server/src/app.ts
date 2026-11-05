@@ -3,7 +3,9 @@ import type { HealthResponse } from "@vr-upm/shared";
 import { Hono } from "hono";
 import type { Config } from "./config.js";
 import type { Db } from "./db/client.js";
+import { buildRoutes } from "./builds/routes.js";
 import { originCheck } from "./middleware/origin-check.js";
+import { packageRoutes } from "./packages/routes.js";
 import { uploadRoutes } from "./uploads/routes.js";
 import { VERSION } from "./version.js";
 
@@ -22,7 +24,9 @@ export function createApp({ config, db }: AppDeps) {
     .get("/health", (c) =>
       c.json({ status: "ok", version: VERSION, mode: config.MODE } satisfies HealthResponse),
     )
-    .route("/uploads", uploadRoutes({ db, workspaceDir: config.WORKSPACE_DIR, maxUploadBytes: config.MAX_UPLOAD_BYTES }));
+    .route("/uploads", uploadRoutes({ db, workspaceDir: config.WORKSPACE_DIR, maxUploadBytes: config.MAX_UPLOAD_BYTES }))
+    .route("/packages", packageRoutes({ db }))
+    .route("/builds", buildRoutes({ db, workspaceDir: config.WORKSPACE_DIR }));
 
   const app = new Hono().route("/api", api);
 

@@ -1,4 +1,4 @@
-import { type DependencyList, useEffect, useState } from "react";
+import { type DependencyList, useCallback, useEffect, useRef, useState } from "react";
 
 export type Loadable<T> = { status: "loading" } | { status: "error"; error: Error } | { status: "ready"; data: T };
 
@@ -6,10 +6,13 @@ export type Loadable<T> = { status: "loading" } | { status: "error"; error: Erro
 export function useLoad<T>(load: () => Promise<T>, deps: DependencyList): { state: Loadable<T>; reload: () => void } {
   const [state, setState] = useState<Loadable<T>>({ status: "loading" });
   const [nonce, setNonce] = useState(0);
+  // reload() での読み直しは、表示を「読み込み中」に戻さずに差し替える(ポーリングでちらつかせない)
+  const silent = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps は呼び出し側が指定する
   useEffect(() => {
     let cancelled = false;
-    setState({ status: "loading" });
+    if (!silent.current) setState({ status: "loading" });
+    silent.current = false;
     load().then(
       (data) => !cancelled && setState({ status: "ready", data }),
       (error: unknown) => !cancelled && setState({ status: "error", error: error instanceof Error ? error : new Error(String(error)) }),
@@ -18,5 +21,9 @@ export function useLoad<T>(load: () => Promise<T>, deps: DependencyList): { stat
       cancelled = true;
     };
   }, [...deps, nonce]);
-  return { state, reload: () => setNonce((n) => n + 1) };
+  const reload = useCallback(() => {
+    silent.current = true;
+    setNonce((n) => n + 1);
+  }, []);
+  return { state, reload };
 }

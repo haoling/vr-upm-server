@@ -22,3 +22,24 @@ dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 .tree .size { margin-left: 0.75rem; opacity: 0.6; }
 .badge { margin-left: 0.5rem; padding: 0 0.4rem; border-radius: 4px; font-size: 0.75rem; }
 .badge.warn { background: #f5a62344; }
+header { display: flex; gap: 1.5rem; align-items: baseline; }
+nav { display: flex; gap: 1rem; }
+a.button, button.primary { display: inline-block; padding: 0.4rem 0.9rem; border-radius: 6px; background: #2563eb; color: #fff; text-decoration: none; border: 0; cursor: pointer; font: inherit; }
+button.primary:disabled { opacity: 0.5; cursor: default; }
+button.danger { color: crimson; }
+.form-grid { display: grid; grid-template-columns: max-content 1fr; gap: 0.5rem 1rem; align-items: start; max-width: 720px; }
+.form-grid label { font-weight: 600; padding-top: 0.25rem; }
+.form-grid input, .form-grid textarea { width: 100%; box-sizing: border-box; font: inherit; }
+.hint { font-size: 0.8rem; opacity: 0.7; font-weight: 400; }
+.actions { display: flex; gap: 0.75rem; align-items: center; margin: 1rem 0; flex-wrap: wrap; }
+.tree .outside { opacity: 0.45; }
+.tree .excluded > .name, .tree .excluded > .toggle { text-decoration: line-through; opacity: 0.6; }
+.tree .root-mark { color: #2563eb; font-weight: 600; margin-left: 0.5rem; }
+.tree .pick { margin-left: 0.75rem; font-size: 0.75rem; }
+.tree label.exclude { margin-left: 0.75rem; font-size: 0.8rem; }
+.status { padding: 0 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+.status.ready, .status.published { background: #16a34a33; }
+.status.failed { background: #dc262633; }
+.status.queued, .status.building { background: #f5a62344; }
+pre.log { background: #8881; padding: 0.75rem; overflow: auto; max-height: 24rem; white-space: pre-wrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }

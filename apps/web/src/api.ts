@@ -1,6 +1,11 @@
 import {
   ApiError,
+  BuildDetail,
+  BuildListResponse,
   HealthResponse,
+  PackageDetail,
+  PackageListResponse,
+  type PackageSaveRequest,
   UploadCreateResponse,
   UploadDetail,
   UploadListResponse,
@@ -32,6 +37,16 @@ export function toApiRequestError(status: number, bodyText: string): ApiRequestE
 
 async function getJson<S extends z.ZodType>(path: string, schema: S): Promise<z.infer<S>> {
   const res = await fetch(path, { headers: { accept: "application/json" } });
+  if (!res.ok) throw toApiRequestError(res.status, await res.text());
+  return schema.parse(await res.json());
+}
+
+async function sendJson<S extends z.ZodType>(method: string, path: string, body: unknown, schema: S): Promise<z.infer<S>> {
+  const res = await fetch(path, {
+    method,
+    headers: { accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw toApiRequestError(res.status, await res.text());
   return schema.parse(await res.json());
 }
@@ -74,4 +89,15 @@ export const api = {
   health: () => getJson("/api/health", HealthResponse),
   uploads: () => getJson("/api/uploads", UploadListResponse),
   upload: (id: number) => getJson(`/api/uploads/${id}`, UploadDetail),
+  packages: () => getJson("/api/packages", PackageListResponse),
+  package: (id: number) => getJson(`/api/packages/${id}`, PackageDetail),
+  createPackage: (body: PackageSaveRequest) => sendJson("POST", "/api/packages", body, PackageDetail),
+  updatePackage: (id: number, body: PackageSaveRequest) => sendJson("PUT", `/api/packages/${id}`, body, PackageDetail),
+  builds: () => getJson("/api/builds", BuildListResponse),
+  build: (id: number) => getJson(`/api/builds/${id}`, BuildDetail),
+  createBuild: (packageId: number, uploadId: number) => sendJson("POST", "/api/builds", { packageId, uploadId }, BuildDetail),
+  discardBuild: async (id: number): Promise<void> => {
+    const res = await fetch(`/api/builds/${id}`, { method: "DELETE" });
+    if (!res.ok) throw toApiRequestError(res.status, await res.text());
+  },
 };
