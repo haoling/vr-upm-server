@@ -959,20 +959,36 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vr-upm/core@workspace:*, @vr-upm/core@workspace:packages/core":
+"@vr-upm/cli@workspace:apps/cli":
   version: 0.0.0-use.local
-  resolution: "@vr-upm/core@workspace:packages/core"
+  resolution: "@vr-upm/cli@workspace:apps/cli"
   dependencies:
+    "@vr-upm/core": "workspace:*"
+    "@vr-upm/fixtures": "workspace:*"
+    "@vr-upm/shared": "workspace:*"
+    tsx: "npm:^4.23.15"
     vite: "npm:^8.3.5"
     vitest: "npm:^5.1.0"
   languageName: unknown
   linkType: soft
 
-"@vr-upm/fixtures@workspace:fixtures":
+"@vr-upm/core@workspace:*, @vr-upm/core@workspace:packages/core":
+  version: 0.0.0-use.local
+  resolution: "@vr-upm/core@workspace:packages/core"
+  dependencies:
+    "@vr-upm/fixtures": "workspace:*"
+    "@vr-upm/shared": "workspace:*"
+    tar: "npm:^7.5.22"
+    vite: "npm:^8.3.5"
+    vitest: "npm:^5.1.0"
+  languageName: unknown
+  linkType: soft
+
+"@vr-upm/fixtures@workspace:*, @vr-upm/fixtures@workspace:fixtures":
   version: 0.0.0-use.local
   resolution: "@vr-upm/fixtures@workspace:fixtures"
   dependencies:
-    tar: "npm:^7.5.22"
+    tsx: "npm:^4.23.15"
   languageName: unknown
   linkType: soft
 

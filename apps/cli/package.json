@@ -1,0 +1,21 @@
+{
+  "name": "@vr-upm/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "unitypackage の解析・変換をローカルで試す CLI(vr-upm)",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@vr-upm/core": "workspace:*",
+    "@vr-upm/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@vr-upm/fixtures": "workspace:*",
+    "tsx": "^4.23.15",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
+  }
+}
