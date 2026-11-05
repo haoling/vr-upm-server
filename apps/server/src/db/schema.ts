@@ -48,6 +48,9 @@ export const builds = sqliteTable(
       .notNull()
       .default("queued"),
     tarballIntegrity: text("tarball_integrity"),
+    tarballSize: integer("tarball_size"),
+    /** ファイル一覧・サイズ・警告(DryRunReport)。UI の dry-run 表示に使う */
+    dryRun: text("dry_run", { mode: "json" }),
     log: text("log"),
     createdAt: createdAt(),
   },

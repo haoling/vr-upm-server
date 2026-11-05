@@ -4,6 +4,7 @@ import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db/client.js";
 import { cleanupIncoming, ensureUploadsDir } from "./uploads/storage.js";
+import { recoverBuilds } from "./builds/runner.js";
 import { startWorker } from "./worker.js";
 
 const config = loadConfig();
@@ -23,7 +24,12 @@ if (config.MODE === "all" || config.MODE === "api") {
 }
 
 if (config.MODE === "all" || config.MODE === "worker") {
-  const worker = startWorker(db, { pollIntervalMs: config.WORKER_POLL_INTERVAL_MS });
+  // 前回の異常終了で残ったビルドの作業領域を掃除する(building のまま残った Build はやり直す)
+  const recovered = await recoverBuilds(db, config.WORKSPACE_DIR);
+  if (recovered.requeued > 0 || recovered.removedDirs > 0) {
+    console.log(`[worker] recovered: requeued=${recovered.requeued} removedDirs=${recovered.removedDirs}`);
+  }
+  const worker = startWorker(db, { pollIntervalMs: config.WORKER_POLL_INTERVAL_MS, workspaceDir: config.WORKSPACE_DIR });
   stoppers.push(() => worker.stop());
 }
 

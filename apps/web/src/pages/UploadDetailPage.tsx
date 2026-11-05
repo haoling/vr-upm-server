@@ -53,6 +53,14 @@ function Detail({ upload }: { upload: import("@vr-upm/shared").UploadDetail }) {
         )}
       </dl>
 
+      {analysis && (
+        <p>
+          <Link to={`/uploads/${upload.id}/packages/new`} className="button">
+            このファイルからパッケージ設定を作る
+          </Link>
+        </p>
+      )}
+
       {!analysis ? (
         <p role="alert" className="error">
           解析結果がありません(保存された形式が古いか、解析されていません)。

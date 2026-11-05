@@ -115,3 +115,44 @@ ls apps/server/data/workspace/uploads                                        # <
 ```
 
 受信中のファイルは `workspace/uploads/.incoming-*` に書き、解析が通ってから `<sha256>.unitypackage` に rename します。異常終了で残ったものは起動時に消します。
+
+## パッケージ設定とビルド(管理画面)
+
+Upload 詳細の「このファイルからパッケージ設定を作る」から設定画面に入ります。
+名前・version などを入力し、ファイルツリー上で「ルートにする」と、ルート配下の「除外」チェックを選べます(除外はルートからの相対パスの glob として保存され、テキスト欄でも編集できます)。
+「保存してビルド」で Build が queued になり、Worker が `workspace/builds/<id>/` で変換して ready / failed にします。Build 詳細に dry-run(tarball に入るファイル・サイズ・警告)とログが出ます。
+ready の Build の tarball は `workspace/builds/<id>/package.tgz` に残ります(publish は M5)。「この Build を破棄」でレコードと tarball を消します。
+
+- Build は作成時点の設定のスナップショットを持ち、Package を後から編集しても変わりません
+- 元ファイルが `workspace` に無い Upload ではビルドを作れません(409)。同じファイルを再アップロードすると元の Upload に戻ります
+- 起動時に `workspace/builds/` の残骸を消し、`building` のまま残った Build は queued に戻してやり直します
+- UPM パッケージ名は作成後に変えられません(publish 済みの識別子のため)
+
+API(`/api` 配下。状態を変える API は Origin チェックあり。ボディは JSON):
+
+| エンドポイント | 内容 |
+|---|---|
+| `GET /api/packages`、`GET /api/packages/:id` | Package 一覧・詳細(`config` は `ConvertConfig`) |
+| `POST /api/packages` | `{"config": ConvertConfig}` で作成。同名は 409 |
+| `PUT /api/packages/:id` | `{"config": ConvertConfig}` で更新。`packageName` の変更は 400 |
+| `POST /api/builds` | `{"packageId", "uploadId"}`。設定をスナップショットして queued の Build を作る(201)。元ファイルが無ければ 409 `source-file-missing`、publish 済みの version なら 409 |
+| `GET /api/builds`、`GET /api/builds/:id` | 一覧・詳細(詳細に `config` スナップショット・`dryRun`・`log`) |
+| `DELETE /api/builds/:id` | 破棄(204)。ビルド中・publish 済みは 409 |
+
+```sh
+yarn fixtures
+# yarn dev を起動しておく(別のターミナル。Origin ヘッダを付けない curl は Origin チェックを通る)
+curl -X POST --data-binary @fixtures/out/simple.unitypackage \
+  "http://localhost:3000/api/uploads?filename=simple.unitypackage"                      # Upload #1
+curl -X POST -H 'content-type: application/json' \
+  --data "{\"config\": $(cat fixtures/configs/simple.json)}" http://localhost:3000/api/packages   # Package #1
+curl -X POST -H 'content-type: application/json' \
+  -d '{"packageId":1,"uploadId":1}' http://localhost:3000/api/builds                    # Build #1 (queued)
+sleep 3
+curl http://localhost:3000/api/builds/1        # status: ready、dryRun.files、log
+ls apps/server/data/workspace/builds/1         # package.tgz だけ
+tar tzf apps/server/data/workspace/builds/1/package.tgz
+curl -X DELETE http://localhost:3000/api/builds/1                                       # 204、ディレクトリも消える
+```
+
+CLI(`vr-upm build`)と同じ入力・設定なら、Worker が作る tarball の integrity は CLI と一致します。
