@@ -31,15 +31,33 @@ export function BuildDetailPage() {
           {state.error instanceof ApiRequestError && state.error.status === 404 ? "Build が見つかりません。" : state.error.message}
         </p>
       )}
-      {state.status === "ready" && <Detail build={state.data} />}
+      {state.status === "ready" && <Detail build={state.data} reload={reload} />}
     </>
   );
 }
 
-function Detail({ build }: { build: BuildDetail }) {
+function Detail({ build, reload }: { build: BuildDetail; reload: () => void }) {
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
+  const [confirmingPublish, setConfirmingPublish] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const registry = useLoad(() => api.registry(), []).state;
+
+  const publish = async () => {
+    setPublishing(true);
+    setError(null);
+    try {
+      await api.publishBuild(build.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setConfirmingPublish(false);
+      setPublishing(false);
+      // 成功しても失敗しても、状態とログを読み直す(失敗の理由は Build のログに残る)
+      reload();
+    }
+  };
 
   const discard = async () => {
     try {
@@ -70,6 +88,12 @@ function Detail({ build }: { build: BuildDetail }) {
         </dd>
         <dt>作成日時</dt>
         <dd>{formatDateTime(build.createdAt)}</dd>
+        {build.publishedAt && (
+          <>
+            <dt>publish 日時</dt>
+            <dd>{formatDateTime(build.publishedAt)}</dd>
+          </>
+        )}
         {build.tarballIntegrity && (
           <>
             <dt>tarball</dt>
@@ -84,6 +108,36 @@ function Detail({ build }: { build: BuildDetail }) {
       {error && (
         <p role="alert" className="error">
           {error}
+        </p>
+      )}
+      {build.status === "ready" && (
+        <div className="actions">
+          {registry.status === "ready" && !registry.data.publishEnabled ? (
+            <span className="warning">publish 先のレジストリが未設定です(REGISTRY_URL と REGISTRY_TOKEN を設定してください)。</span>
+          ) : confirmingPublish ? (
+            <>
+              <span>
+                {build.packageName} {build.version} を {registry.status === "ready" ? registry.data.url : "レジストリ"} に publish しますか?
+                同じ version は二度と publish できません。
+              </span>
+              <button type="button" onClick={publish} disabled={publishing}>
+                {publishing ? "publish 中…" : "publish する"}
+              </button>
+              <button type="button" onClick={() => setConfirmingPublish(false)} disabled={publishing}>
+                やめる
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setConfirmingPublish(true)} disabled={registry.status !== "ready"}>
+              Verdaccio に publish
+            </button>
+          )}
+        </div>
+      )}
+      {build.status === "published" && (
+        <p>
+          publish 済みです。Unity からは <code>{build.packageName}</code> の {build.version} として取得できます。
+          <Link to="/published"> 公開済みバージョンの一覧へ</Link>
         </p>
       )}
       {canDiscard && (

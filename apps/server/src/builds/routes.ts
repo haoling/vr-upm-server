@@ -5,6 +5,8 @@ import {
   type BuildDetail,
   type BuildListResponse,
   type BuildSummary,
+  type PublishedListResponse,
+  type RegistryInfo,
 } from "@vr-upm/shared";
 import { desc, eq, and } from "drizzle-orm";
 import { Hono } from "hono";
@@ -12,6 +14,7 @@ import type { Db } from "../db/client.js";
 import { builds, packages, uploads } from "../db/schema.js";
 import { fail, parseId, parseJsonBody } from "../http.js";
 import { uploadFilePath } from "../uploads/storage.js";
+import { PublishError, publishBuild, type RegistryTarget } from "./publish.js";
 import { removeBuildDir } from "./storage.js";
 import { stat } from "node:fs/promises";
 
@@ -31,6 +34,7 @@ function toSummary({ build, packageName, uploadFilename }: Joined): BuildSummary
     tarballIntegrity: build.tarballIntegrity,
     tarballSize: build.tarballSize,
     createdAt: build.createdAt,
+    publishedAt: build.publishedAt,
   };
 }
 
@@ -57,7 +61,7 @@ async function isFile(path: string): Promise<boolean> {
  * Build の作成・参照・破棄(DESIGN.md 3.3 の 1〜3)。
  * ビルド自体は Worker が `queued` を取り出して実行する。
  */
-export function buildRoutes({ db, workspaceDir }: { db: Db; workspaceDir: string }) {
+export function buildRoutes({ db, workspaceDir, registry }: { db: Db; workspaceDir: string; registry: RegistryTarget | null }) {
   const joinedQuery = () =>
     db
       .select({ build: builds, packageName: packages.name, uploadFilename: uploads.originalFilename })
@@ -128,6 +132,17 @@ export function buildRoutes({ db, workspaceDir }: { db: Db; workspaceDir: string
       const created = joinedQuery().where(eq(builds.id, row.id)).get() as Joined;
       return c.json(toDetail(created), 201);
     })
+    .post("/:id/publish", async (c) => {
+      const id = parseId(c.req.param("id"));
+      if (id === null || !joinedQuery().where(eq(builds.id, id)).get()) return notFound();
+      try {
+        await publishBuild(db, workspaceDir, registry, id);
+      } catch (err) {
+        if (err instanceof PublishError) return fail(err.status, { error: err.message, code: err.code });
+        throw err;
+      }
+      return c.json(toDetail(joinedQuery().where(eq(builds.id, id)).get() as Joined));
+    })
     .delete("/:id", async (c) => {
       const id = parseId(c.req.param("id"));
       const row = id === null ? undefined : joinedQuery().where(eq(builds.id, id)).get();
@@ -141,5 +156,22 @@ export function buildRoutes({ db, workspaceDir }: { db: Db; workspaceDir: string
       db.delete(builds).where(eq(builds.id, id)).run();
       await removeBuildDir(workspaceDir, id);
       return c.body(null, 204);
+    });
+}
+
+/** publish 先の情報と publish 済みバージョンの一覧(DESIGN.md 3.3 の 4〜5)。トークンは返さない */
+export function publishedRoutes({ db, registry, registryUrl }: { db: Db; registry: RegistryTarget | null; registryUrl: string | null }) {
+  return new Hono()
+    .get("/registry", (c) => c.json({ url: registryUrl, publishEnabled: registry !== null } satisfies RegistryInfo))
+    .get("/published", (c) => {
+      const rows = db
+        .select({ build: builds, packageName: packages.name, uploadFilename: uploads.originalFilename })
+        .from(builds)
+        .innerJoin(packages, eq(builds.packageId, packages.id))
+        .innerJoin(uploads, eq(builds.uploadId, uploads.id))
+        .where(eq(builds.status, "published"))
+        .orderBy(desc(builds.publishedAt), desc(builds.id))
+        .all();
+      return c.json({ published: rows.map(toSummary) } satisfies PublishedListResponse);
     });
 }

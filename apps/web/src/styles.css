@@ -43,3 +43,4 @@ button.danger { color: crimson; }
 .status.queued, .status.building { background: #f5a62344; }
 pre.log { background: #8881; padding: 0.75rem; overflow: auto; max-height: 24rem; white-space: pre-wrap; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td code { word-break: break-all; }

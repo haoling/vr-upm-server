@@ -1,0 +1,39 @@
+# ローカル確認用の Verdaccio 設定例(DESIGN.md 8.4)。
+# docker compose(../../docker-compose.yml)がこのディレクトリを /verdaccio/conf にマウントする。
+# テスト(apps/server/src/builds/publish.test.ts)もこのファイルをそのまま読んで、プロセス内で Verdaccio を起動する。
+# 本番(k8s)のコンフィグもこの方針に揃える。
+
+storage: /verdaccio/storage
+
+# ユーザーは htpasswd ファイルに自分で書く(README 参照)。自己登録は無効
+auth:
+  htpasswd:
+    file: /verdaccio/conf/htpasswd
+    max_users: -1
+
+# Verdaccio 付属の Web UI は使わない(管理画面だけを入口にする)
+web:
+  enable: false
+
+# 自分用 scope には uplink(npmjs へのプロキシ)を付けない: パッケージ名の漏洩・依存かぶりを防ぐ。
+# 読み取りも含めて認証必須(`$all` / `$anonymous` は使わない)。
+# publish できるのは管理画面のサービスアカウント(publisher)だけ。
+# Unity 用のアカウント(unity)は読み取りだけで、publish / unpublish はできない。
+packages:
+  "com.haoling.*":
+    access: $authenticated
+    publish: publisher
+    unpublish: publisher
+  # それ以外の名前は扱わない(uplink もなし)。読み取りは認証必須のまま
+  "**":
+    access: $authenticated
+    publish: publisher
+    unpublish: publisher
+
+# 外部に公開するときは、tarball の URL が外部 URL になるよう url_prefix を設定する
+# url_prefix: https://upm.example.com
+
+log:
+  type: stdout
+  format: pretty
+  level: http

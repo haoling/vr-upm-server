@@ -5,6 +5,7 @@ import { buildUnitypackage, fixtureGuid, fixtureMeta, unitypackageEntries } from
 import { describe, expect, it } from "vitest";
 import { deterministicFolderGuid } from "../guid.js";
 import { inspectUnitypackage } from "../unitypackage/analyze.js";
+import { readTarballManifest } from "./manifest.js";
 import { packTarball, UpmPlanError } from "./pack.js";
 import { planUpm } from "./plan.js";
 import { convert, makeConfig, readTgz, SOURCE } from "./test-helpers.js";
@@ -338,5 +339,19 @@ describe("inspectUnitypackage の assetSink", () => {
     const tar = gunzipSync(tgz!);
     expect(tar.length % 512).toBe(0);
     expect(tar.subarray(tar.length - 1024).every((b) => b === 0)).toBe(true);
+  });
+});
+
+describe("readTarballManifest", () => {
+  it("tarball の package/package.json を読む", async () => {
+    const { tgz } = await convert(basicAssets);
+    const manifest = await readTarballManifest(tgz as Buffer);
+    expect(manifest).toMatchObject({ name: "com.example.shop.item", version: "1.0.0", displayName: "Dummy Item" });
+  });
+
+  it("tgz でなかったり package.json が無かったりすれば例外", async () => {
+    await expect(readTarballManifest(Buffer.from("not a tarball"))).rejects.toThrow();
+    const { gzipSync } = await import("node:zlib");
+    await expect(readTarballManifest(gzipSync(Buffer.alloc(1024)))).rejects.toThrow(/package\.json/);
   });
 });

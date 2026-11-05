@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // DESIGN.md 7章のデータモデル。JSON 列は text(mode: "json") で持つ。
 
@@ -53,8 +53,16 @@ export const builds = sqliteTable(
     dryRun: text("dry_run", { mode: "json" }),
     log: text("log"),
     createdAt: createdAt(),
+    /** publish した日時(status = published のとき) */
+    publishedAt: text("published_at"),
   },
-  (t) => [index("builds_status_idx").on(t.status)],
+  (t) => [
+    index("builds_status_idx").on(t.status),
+    // 同じパッケージ・version の再 publish は禁止(DESIGN.md 3.3 の 4)。アプリ側の確認が競合しても DB が止める
+    uniqueIndex("builds_published_version_uq")
+      .on(t.packageId, t.version)
+      .where(sql`status = 'published'`),
+  ],
 );
 
 export const guidIndex = sqliteTable(
