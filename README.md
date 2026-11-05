@@ -80,6 +80,8 @@ k8s マニフェストはこのリポジトリには置かず、GitOps リポジ
 
 ```sh
 yarn fixtures
-yarn workspace @vr-upm/cli start build fixtures/out/simple.unitypackage --config my-config.json --out /tmp/item.tgz
+# fixtures/configs/simple.json は上の例と同じ形の設定ファイル(自分の設定を使うときはそのパスに置き換える)
+yarn workspace @vr-upm/cli start build fixtures/out/simple.unitypackage --config fixtures/configs/simple.json --dry-run
+yarn workspace @vr-upm/cli start build fixtures/out/simple.unitypackage --config fixtures/configs/simple.json --out /tmp/item.tgz
 tar tzf /tmp/item.tgz
 ```

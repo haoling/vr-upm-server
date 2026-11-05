@@ -1,0 +1,9 @@
+{
+  "packageName": "com.example.dummyshop.dummyitem",
+  "displayName": "Dummy Item",
+  "version": "1.0.0",
+  "sourceVersionLabel": "Ver.1.0",
+  "rootPath": "Assets/DummyShop/DummyItem",
+  "exclude": ["Textures/**"],
+  "boothUrl": "https://dummyshop.booth.pm/items/1"
+}

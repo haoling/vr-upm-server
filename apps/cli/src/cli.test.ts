@@ -157,6 +157,14 @@ describe("vr-upm build", () => {
     expect(await readdir(cwd)).toEqual(["config.json", "item.tgz"]);
   });
 
+  it("README の例(fixtures/configs/simple.json)で、リポジトリのルートからビルドできる", async () => {
+    const root = join(import.meta.dirname, "../../..");
+    const cwd = await workdir();
+    const r = await runIn(root, "build", SIMPLE(), "--config", "fixtures/configs/simple.json", "--out", join(cwd, "readme.tgz"));
+    expect(r).toMatchObject({ code: 0, stderr: "" });
+    expect(tarList(join(cwd, "readme.tgz"))).toContain("package/Models/body.fbx");
+  });
+
   it("--out を省略すると ./<packageName>-<version>.tgz に書く", async () => {
     const cwd = await workdir();
     const r = await runIn(cwd, "build", SIMPLE(), "--config", "config.json");
