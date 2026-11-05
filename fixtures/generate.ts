@@ -1,5 +1,5 @@
 /**
- * テスト用の合成 unitypackage を fixtures/out/ に生成する(`pnpm fixtures`)。
+ * テスト用の合成 unitypackage を fixtures/out/ に生成する(`yarn fixtures`)。
  * 中身は src/catalog.ts を参照。
  */
 import { fileURLToPath } from "node:url";

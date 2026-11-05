@@ -1,5 +1,5 @@
 /**
- * `pnpm fixtures` で fixtures/out/ に書き出す合成 unitypackage の一覧。
+ * `yarn fixtures` で fixtures/out/ に書き出す合成 unitypackage の一覧。
  * 実際の BOOTH アセットは入れない(DESIGN.md 6章)。
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";

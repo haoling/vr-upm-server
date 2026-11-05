@@ -10,5 +10,8 @@
   "scripts": {
     "generate": "tsx generate.ts",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
   }
 }

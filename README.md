@@ -5,7 +5,7 @@ BOOTH 等で入手した `.unitypackage` を UPM パッケージに変換し、�
 
 ## 構成
 
-pnpm workspaces のモノレポです。
+Yarn(v4、`nodeLinker: node-modules`)workspaces のモノレポです。
 
 | パス | 内容 |
 |---|---|
@@ -21,22 +21,23 @@ pnpm workspaces のモノレポです。
 
 ## 開発
 
-Node.js 22.12 以上と pnpm(`corepack enable` で `packageManager` のバージョンが入ります)が必要です。
+Node.js 22.12 以上と Yarn 4 が必要です(`corepack enable` で `packageManager` のバージョンが入ります)。
+公開から 1 日未満のバージョンは Yarn の既定(`npmMinimalAgeGate`)で入らないので、依存を上げるときは注意してください。
 
 ```sh
-pnpm install
+yarn install
 cp apps/server/.env.example apps/server/.env
-pnpm dev          # server(:3000)と web(:5173)を同時に起動。web の /api は server に転送される
+yarn dev          # server(:3000)と web(:5173)を同時に起動。web の /api は server に転送される
 ```
 
 | コマンド | 内容 |
 |---|---|
-| `pnpm typecheck` | 全パッケージの型チェック |
-| `pnpm test` | vitest(`packages/*`、`apps/server`、`apps/cli`) |
-| `pnpm build` | server のバンドルと web のビルド |
-| `pnpm fixtures` | `fixtures/out/` に合成 unitypackage を生成 |
-| `pnpm --filter @vr-upm/cli start analyze <file> [--json]` | unitypackage を解析してツリー・.meta が無いフォルダ・問題点を表示 |
-| `pnpm --filter @vr-upm/server db:generate` | `src/db/schema.ts` の変更から Drizzle のマイグレーションを生成 |
+| `yarn typecheck` | 全パッケージの型チェック |
+| `yarn test` | vitest(`packages/*`、`apps/server`、`apps/cli`) |
+| `yarn build` | server のバンドルと web のビルド |
+| `yarn fixtures` | `fixtures/out/` に合成 unitypackage を生成 |
+| `yarn workspace @vr-upm/cli start analyze <file> [--json]` | unitypackage を解析してツリー・.meta が無いフォルダ・問題点を表示 |
+| `yarn workspace @vr-upm/server db:generate` | `src/db/schema.ts` の変更から Drizzle のマイグレーションを生成 |
 
 マイグレーションは server の起動時に自動で適用されます。
 

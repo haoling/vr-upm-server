@@ -2,22 +2,36 @@
   "name": "vr-upm-server",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.28.0",
+  "packageManager": "yarn@4.18.1",
   "engines": {
     "node": ">=22.12"
   },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "fixtures"
+  ],
   "scripts": {
-    "dev": "pnpm -r --parallel --filter @vr-upm/server --filter @vr-upm/web dev",
-    "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
+    "dev": "yarn workspaces foreach -Api -j unlimited --include @vr-upm/server --include @vr-upm/web run dev",
+    "build": "yarn workspaces foreach -At run build",
+    "typecheck": "yarn workspaces foreach -Ap run typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
-    "fixtures": "pnpm --filter @vr-upm/fixtures generate"
+    "fixtures": "yarn workspace @vr-upm/fixtures generate"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
+    "vite": "^8.3.5",
     "vitest": "^5.1.0"
+  },
+  "dependenciesMeta": {
+    "better-sqlite3": {
+      "built": true
+    },
+    "esbuild": {
+      "built": true
+    }
   }
 }

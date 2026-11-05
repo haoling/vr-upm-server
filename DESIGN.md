@@ -135,7 +135,7 @@ TypeScriptで統一する。publish先がnpmレジストリなので、tarball�
 
 ## 6. リポジトリ構成
 
-pnpm workspacesのモノレポにする(Turborepo等は現時点では不要)。
+Yarn(v4、node-modules linker)workspacesのモノレポにする(Turborepo等は現時点では不要)。
 
 ```
 unitypackage-registry/
@@ -149,7 +149,7 @@ unitypackage-registry/
 ├── fixtures/          # テスト用の合成unitypackage生成スクリプト
 ├── Dockerfile         # server + webのビルド成果物を1イメージに
 ├── DESIGN.md
-└── pnpm-workspace.yaml
+└── package.json       # workspaces の定義
 ```
 
 - `packages/core` はI/Oを持たない純粋なライブラリにする

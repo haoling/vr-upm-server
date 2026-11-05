@@ -7,7 +7,7 @@ import { formatAnalysis, parseBytes } from "./format.js";
 export interface CliIO {
   stdout: (text: string) => void;
   stderr: (text: string) => void;
-  /** 相対パスの基準(pnpm 経由で起動されたときは呼び出し元のディレクトリ) */
+  /** 相対パスの基準(base-dir.ts を参照) */
   cwd: string;
 }
 
