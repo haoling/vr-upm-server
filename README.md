@@ -23,7 +23,7 @@ Yarn(v4、`nodeLinker: node-modules`)workspaces のモノレポです。
 
 Node.js 22.12 以上と Yarn 4 が必要です(`corepack enable` で `packageManager` のバージョンが入ります)。
 localhost 以外のホスト名(リバースプロキシやクラウド開発環境)から web の開発サーバーを開くときは、`ALLOWED_HOSTS=<ホスト名>`(カンマ区切り。`apps/web/.env` でも可。`apps/web/.env.example` 参照)を指定します。
-その場合、書き込み API の Origin チェックのため、server の `ALLOWED_ORIGINS` にも同じ URL(例: `https://<ホスト名>`)を入れてください。
+その場合、書き込み API の Origin チェックのため、server の `ALLOWED_ORIGINS` にも同じ URL(例: `https://<ホスト名>`)を入れてください。サブドメインが変わる環境(`ALLOWED_HOSTS=.coder.example.com` など)は `https://*.coder.example.com` のようにワイルドカードで書けます(scheme とポートは一致が必要。`*` は 1 つ以上のラベルに一致し、`coder.example.com` 自身には一致しません)。
 公開から 1 日未満のバージョンは Yarn の既定(`npmMinimalAgeGate`)で入らないので、依存を上げるときは注意してください。
 
 ```sh
@@ -57,7 +57,7 @@ k8s マニフェストはこのリポジトリには置かず、GitOps リポジ
 | `DB_PATH` | `/data/db/app.sqlite` | SQLite(`db` PVC) |
 | `WORKSPACE_DIR` | `/data/workspace` | 元 unitypackage・作業領域(`workspace` PVC) |
 | `MAX_UPLOAD_BYTES` | `4294967296`(4 GiB) | アップロードボディの上限(バイト) |
-| `ALLOWED_ORIGINS` | (空) | 状態を変える API で許可する Origin(カンマ区切り)。管理画面の外部 URL を入れる |
+| `ALLOWED_ORIGINS` | (空) | 状態を変える API で許可する Origin(カンマ区切り)。管理画面の外部 URL を入れる。`https://*.example.com` 形式のサブドメインのワイルドカードも可 |
 
 ## UPM 変換(`vr-upm build`)
 
