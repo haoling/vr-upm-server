@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Readable, Transform, type TransformCallback } from "node:stream";
+import { Readable, Transform, type TransformCallback, type Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import { Parser, type ReadEntry } from "tar";
@@ -8,6 +8,12 @@ import type { AnalyzeLimits } from "./limits.js";
 
 /** 解析の入力。ファイルの読み込みは呼び出し側が行う(core は I/O を持たない) */
 export type UnitypackageInput = Uint8Array | AsyncIterable<Uint8Array> | Iterable<Uint8Array>;
+
+/**
+ * `<guid>/asset` の中身の書き出し先を返す。core は I/O を持たないので、保存先(一時ディレクトリ等)は呼び出し側が決める。
+ * 返した Writable には asset の中身が流れ込み、読み終わったら `end()` される。
+ */
+export type AssetSink = (guid: string, size: number) => Writable;
 
 /** `<guid>/` ディレクトリ 1 つ分の中身 */
 export interface RawGuidEntry {
@@ -72,7 +78,11 @@ function entrySegments(path: string): string[] {
  * - `asset.meta` と `pathname` はメモリに読む(上限あり)
  * - 上限超過・壊れた入力・危険なパスは {@link UnitypackageAnalysisError} で止める
  */
-export async function readUnitypackage(input: UnitypackageInput, limits: AnalyzeLimits): Promise<RawUnitypackage> {
+export async function readUnitypackage(
+  input: UnitypackageInput,
+  limits: AnalyzeLimits,
+  assetSink?: AssetSink,
+): Promise<RawUnitypackage> {
   const result: RawUnitypackage = {
     entries: new Map(),
     notices: [],
@@ -82,6 +92,8 @@ export async function readUnitypackage(input: UnitypackageInput, limits: Analyze
   };
 
   let fatal: Error | undefined;
+  const writers: Writable[] = [];
+  const writerDone: Promise<void>[] = [];
   const parser = new Parser({ strict: true });
 
   const fail = (err: Error) => {
@@ -162,12 +174,30 @@ export async function readUnitypackage(input: UnitypackageInput, limits: Analyze
           let size = 0;
           // 重複判定のために先に場所を確保しておく(本体は後から埋める)
           e.asset = { size: 0, sha256: "" };
+          const writer = assetSink?.(dir, entry.size);
+          if (writer) {
+            writers.push(writer);
+            writerDone.push(
+              new Promise<void>((resolve) => {
+                writer.on("finish", resolve);
+                writer.on("error", (err: Error) => {
+                  fail(err);
+                  resolve();
+                });
+              }),
+            );
+          }
           entry.on("data", (c: Buffer) => {
             size += c.length;
             hash.update(c);
+            if (writer && !writer.write(c)) {
+              entry.pause();
+              writer.once("drain", () => entry.resume());
+            }
           });
           entry.on("end", () => {
             e.asset = { size, sha256: hash.digest("hex") };
+            writer?.end();
           });
           break;
         }
@@ -264,9 +294,11 @@ export async function readUnitypackage(input: UnitypackageInput, limits: Analyze
       const ended = waitFor("end");
       parser.end();
       await ended;
+      await Promise.all(writerDone);
       if (fatal) throw fatal;
     });
   } catch (err) {
+    for (const w of writers) w.destroy();
     if (err instanceof UnitypackageAnalysisError) throw err;
     if (fatal) throw fatal;
     // zlib のエラー(壊れた gzip、途中で切れた入力など)

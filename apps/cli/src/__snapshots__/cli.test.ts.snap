@@ -103,3 +103,25 @@ exports[`vr-upm analyze > 異常系 traversal は [unsafe-path] で止まり、�
 "traversal.unitypackage: 解析を中止しました [unsafe-path] bfc40c0598e3820e3d166c4446854544/pathname: unsafe pathname "Assets/../../evil.txt": path traversal
 "
 `;
+
+exports[`vr-upm build > --dry-run はファイル一覧とサイズを表示し、何も書き出さない 1`] = `
+"simple.unitypackage → com.example.shop.item@1.2.3(dry-run: tarball は作りません)
+  ルート: Assets/DummyShop/DummyItem(外のアセット 0 個は取り込まない)
+  除外: 1 個(Textures/**)
+
+ファイル(package/ 配下): 8 個, 1.2 KiB
+  package.json  390 B  [生成]
+  package.json.meta  158 B  [生成]
+  Models.meta  172 B  [.meta 生成]
+  Models/body.fbx  9 B
+  Models/body.fbx.meta  152 B
+  Prefabs.meta  172 B  [.meta 生成]
+  Prefabs/item.prefab  10 B
+  Prefabs/item.prefab.meta  152 B
+
+除外したアセット:
+  Textures/body.png
+
+問題はありません。--dry-run を外すと tarball を作ります
+"
+`;
