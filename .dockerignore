@@ -4,3 +4,4 @@
 data
 fixtures/out
 *.sqlite
+.yarn
